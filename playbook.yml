@@ -1,0 +1,83 @@
+---
+# playbook.yml
+- name: 'Provision Image'
+  hosts: default
+  become: true
+
+  tasks:
+    - name: Initial pause to let Ubuntu finish unattended updates
+      pause:
+        minutes: 1
+
+    - name: Add Hashicorp Key
+      apt_key:
+        url: https://apt.releases.hashicorp.com/gpg
+        state: present
+
+    - name: Add Hashicorp Repos
+      apt_repository:
+        repo: deb https://apt.releases.hashicorp.com focal main
+        state: present
+
+    - name: Install packages
+      apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: true
+      loop:
+        - nginx
+        - zsh
+        - terraform
+        - python3-venv
+
+    - name: Download Go
+      get_url:
+        url: https://golang.org/dl/go1.17.2.linux-amd64.tar.gz
+        dest: /tmp/go.tar.gz
+        
+    - name: Extract Go Tarball
+      unarchive:
+        src: /tmp/go.tar.gz
+        dest: /usr/local
+        copy: no
+
+    - name: Add 'mmegger' user
+      user:
+        name: mmegger
+        shell: /bin/zsh
+        groups: sudo
+
+    - name: Create mmegger .ssh directory
+      file:
+        path: /home/mmegger/.ssh
+        state: directory
+        owner: mmegger
+        group: mmegger
+        mode: '0700'
+
+    - name: install oh my zsh
+      become: yes
+      become_user: mmegger
+      shell: sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+
+    - name: perform commands as mmegger
+      become: yes
+      become_user: mmegger
+      git:
+        repo: https://github.com/MasonEgger/dotfiles.git
+        version: master
+        dest: /home/mmegger/dotfiles
+
+    - name: copy dotfiles
+      become: yes
+      become_user: mmegger
+      copy:
+        remote_src: yes
+        src: /home/mmegger/dotfiles/{{ item }}
+        dest: /home/mmegger/{{ item }}
+        owner: mmegger
+        group: mmegger
+        mode: '0644'
+      loop:
+        - .zshrc
+        - .vimrc
